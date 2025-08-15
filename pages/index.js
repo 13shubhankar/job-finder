@@ -1,115 +1,226 @@
-import Image from "next/image";
-import { Geist, Geist_Mono } from "next/font/google";
+import { useState, useEffect } from 'react';
+import { useSession } from 'next-auth/react';
+import Head from 'next/head';
+import axios from 'axios';
+import Navbar from '../components/Navbar';
+import JobSearch from '../components/JobSearch';
+import JobCard from '../components/JobCard';
+import { SearchResultsLoading } from '../components/LoadingSpinner';
+import { SearchEmptyState, WelcomeEmptyState, ErrorEmptyState } from '../components/EmptyState';
+import { FaLinkedin } from 'react-icons/fa';
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
+// ... your imports stay the same
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+export default function HomePage() {
+  const { data: session } = useSession();
+  const [jobs, setJobs] = useState([]);
+  const [favorites, setFavorites] = useState(new Set());
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [searchQuery, setSearchQuery] = useState(null);
+  const [hasSearched, setHasSearched] = useState(false);
 
-export default function Home() {
-  return (
-    <div
-      className={`${geistSans.className} ${geistMono.className} font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20`}
-    >
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
+  useEffect(() => {
+    if (session) {
+      loadFavorites();
+    }
+  }, [session]);
+
+  const loadFavorites = async () => {
+    try {
+      const response = await axios.get('/api/favorites');
+      const favoriteIds = new Set(response.data.data.map(job => job.jobId));
+      setFavorites(favoriteIds);
+    } catch (err) {
+      console.error('Error loading favorites:', err);
+    }
+  };
+
+  const handleSearch = async (searchData) => {
+    setLoading(true);
+    setError(null);
+    setSearchQuery(searchData);
+    setHasSearched(true);
+
+    try {
+      const params = new URLSearchParams({
+        query: searchData.query,
+        ...(searchData.location && { location: searchData.location }),
+        ...(searchData.employmentTypes?.length > 0 && { 
+          employment_types: searchData.employmentTypes.join(',') 
+        })
+      });
+
+      const response = await axios.get(`/api/jobs/search?${params}`);
+
+      if (response.data.success) {
+        setJobs(response.data.data);
+      } else {
+        throw new Error(response.data.message || 'Failed to fetch jobs');
+      }
+    } catch (err) {
+      console.error('Search error:', err);
+      setError(err.response?.data?.message || err.message || 'Failed to search jobs');
+      setJobs([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleToggleFavorite = async (job, isFavorite) => {
+    if (!session) {
+      alert('Please sign in to add favorites');
+      return;
+    }
+
+    try {
+      if (isFavorite) {
+        await axios.post('/api/favorites', {
+          id: job.id,
+          title: job.title,
+          company: job.company,
+          location: job.location,
+          employmentType: job.employmentType,
+          applyLink: job.applyLink,
+          companyLogo: job.companyLogo,
+          description: job.description,
+          salary: job.salary
+        });
+        setFavorites(prev => new Set([...prev, job.id]));
+      } else {
+        await axios.delete(`/api/favorites?jobId=${job.id}`);
+        setFavorites(prev => {
+          const updated = new Set(prev);
+          updated.delete(job.id);
+          return updated;
+        });
+      }
+    } catch (err) {
+      console.error('Error toggling favorite:', err);
+      alert(err.response?.data?.message || 'Failed to update favorites');
+    }
+  };
+
+  const handleReset = () => {
+    setJobs([]);
+    setError(null);
+    setSearchQuery(null);
+    setHasSearched(false);
+  };
+
+  const renderContent = () => {
+    if (loading) return <SearchResultsLoading />;
+
+    if (error) {
+      return (
+        <ErrorEmptyState 
+          error={error}
+          onRetry={() => searchQuery && handleSearch(searchQuery)}
         />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              pages/index.js
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+      );
+    }
+
+    if (hasSearched && jobs.length > 0) {
+      return (
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Search Results</h2>
+              <p className="text-gray-600 dark:text-gray-400">
+                Found {jobs.length} jobs
+                {searchQuery?.query && ` for "${searchQuery.query}"`}
+                {searchQuery?.location && ` in ${searchQuery.location}`}
+              </p>
+            </div>
+            <button onClick={handleReset} className="btn-secondary text-sm">
+              New Search
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {jobs.map(job => (
+              <JobCard
+                key={job.id}
+                job={job}
+                isFavorite={favorites.has(job.id)}
+                onToggleFavorite={(jobData, favStatus) => handleToggleFavorite(jobData, favStatus)}
+              />
+            ))}
+          </div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+      );
+    }
+
+    if (hasSearched && jobs.length === 0) {
+      return <SearchEmptyState searchTerm={searchQuery?.query} onReset={handleReset} />;
+    }
+
+    return <WelcomeEmptyState />;
+  };
+
+  return (
+    <>
+      <Head>
+        <title>
+          {hasSearched && searchQuery?.query 
+            ? `${searchQuery.query} Jobs - JobFinder`
+            : 'JobFinder - Find Your Dream Job'}
+        </title>
+        <meta
+          name="description"
+          content={
+            hasSearched && searchQuery?.query
+              ? `Find ${searchQuery.query} jobs${searchQuery.location ? ` in ${searchQuery.location}` : ''}. Browse opportunities from top companies.`
+              : 'Search thousands of job opportunities from top companies worldwide. Find your perfect career match today.'
+          }
+        />
+      </Head>
+
+      <div className="min-h-screen">
+        <Navbar />
+        <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="mb-12">
+            <JobSearch onSearch={handleSearch} loading={loading} />
+          </div>
+          <div className="max-w-7xl mx-auto">{renderContent()}</div>
+        </main>
+
+         <footer className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 mt-16">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 text-center">
+            <p className="text-base font-medium text-gray-700 dark:text-gray-300">
+              © {new Date().getFullYear()}{" "}
+              <span className="font-semibold text-primary-600 dark:text-primary-400">
+                JobFinder
+              </span>
+            </p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 font-semibold">
+              Find opportunities <span className="font-semibold">• Save favorites</span> • Land your dream job
+            </p>
+
+            <div className="my-4 border-t border-gray-300 dark:border-gray-700 w-1/3 mx-auto"></div>
+
+            <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center justify-center gap-2">
+              <a
+                href="https://www.linkedin.com/in/shubhankarraj"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary-600 hover:text-primary-800 text-blue-600 bg-white"
+              >
+                <FaLinkedin size={18} />
+              </a>
+              Made by <span className="font-semibold">NextBroX</span>
+              <a
+                href="https://www.linkedin.com/in/deepankaraj"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary-600 hover:text-primary-800  text-blue-600 bg-white"
+              >
+                <FaLinkedin size={18} />
+              </a>
+            </p>
+          </div>
+        </footer>
+      </div>
+    </>
   );
 }
