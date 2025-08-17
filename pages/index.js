@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useSession, signIn, signOut } from 'next-auth/react';
+import { useSession, signIn } from 'next-auth/react';
 import Head from 'next/head';
 import axios from 'axios';
 import Navbar from '../components/Navbar';
@@ -10,7 +10,7 @@ import { SearchEmptyState, WelcomeEmptyState, ErrorEmptyState } from '../compone
 import { FaLinkedin } from 'react-icons/fa';
 
 export default function HomePage() {
-  const { data: session, status } = useSession();
+  const { data: session } = useSession();
   const [jobs, setJobs] = useState([]);
   const [favorites, setFavorites] = useState(new Set());
   const [loading, setLoading] = useState(false);
@@ -68,7 +68,8 @@ export default function HomePage() {
 
   const handleToggleFavorite = async (job, isFavorite) => {
     if (!session) {
-      alert('Please sign in to add favorites');
+      alert('Please sign in to save favorites');
+      signIn('google');
       return;
     }
 
@@ -177,34 +178,6 @@ export default function HomePage() {
 
       <div className="min-h-screen">
         <Navbar />
-
-        {/* Session Status Banner */}
-        <div className="bg-gray-100 dark:bg-gray-900 py-3 text-center">
-          {status === 'loading' && (
-            <p className="text-gray-600 dark:text-gray-300">Checking authentication...</p>
-          )}
-          {status === 'unauthenticated' && (
-            <button
-              onClick={() => signIn('google')}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-            >
-              Sign in with Google
-            </button>
-          )}
-          {status === 'authenticated' && session && (
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
-              <p className="text-gray-700 dark:text-gray-200">
-                ✅ Logged in as <span className="font-semibold">{session.user?.email}</span>
-              </p>
-              <button
-                onClick={() => signOut()}
-                className="px-3 py-1 text-sm bg-red-600 text-white rounded-md hover:bg-red-700"
-              >
-                Sign out
-              </button>
-            </div>
-          )}
-        </div>
 
         <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="mb-12">
