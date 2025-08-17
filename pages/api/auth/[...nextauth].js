@@ -1,8 +1,7 @@
-// pages/api/auth/[...nextauth].js
-import NextAuth from 'next-auth';
-import GoogleProvider from 'next-auth/providers/google';
-import connectMongoDB from '../../../lib/mongodb';
-import User from '../../../models/User';
+import NextAuth from "next-auth";
+import GoogleProvider from "next-auth/providers/google";
+import connectMongoDB from "../../../lib/mongodb";
+import User from "../../../models/User";
 
 export default NextAuth({
   providers: [
@@ -13,84 +12,95 @@ export default NextAuth({
         params: {
           prompt: "consent",
           access_type: "offline",
-          response_type: "code"
-        }
-      }
-    })
+          response_type: "code",
+        },
+      },
+    }),
   ],
+
   callbacks: {
+    // First sign-in or returning user
     async signIn({ user, account, profile }) {
-      if (account?.provider === 'google') {
+      if (account?.provider === "google") {
         try {
           await connectMongoDB();
-          
-          // Check if user exists
-          let existingUser = await User.findByGoogleId(profile.sub);
-          
+
+          // Check user by Google ID or Email
+          let existingUser =
+            (await User.findOne({ googleId: profile.sub })) ||
+            (await User.findOne({ email: profile.email }));
+
           if (!existingUser) {
             // Create new user
-            existingUser = await User.createFromGoogle({
-              id: profile.sub,
+            existingUser = await User.create({
+              googleId: profile.sub,
               email: profile.email,
               name: profile.name,
-              picture: profile.picture
+              image: profile.picture,
             });
-            console.log('New user created:', existingUser.email);
+            console.log("✅ New user created:", existingUser.email);
           } else {
-            // Update existing user info in case it changed
+            // Update existing user
+            existingUser.googleId = profile.sub;
             existingUser.email = profile.email;
             existingUser.name = profile.name;
             existingUser.image = profile.picture;
             await existingUser.save();
-            console.log('Existing user updated:', existingUser.email);
+            console.log("🔄 Existing user updated:", existingUser.email);
           }
-          
+
           return true;
         } catch (error) {
-          console.error('Error during sign in:', error);
+          console.error("❌ Error during sign in:", error);
           return false;
         }
       }
       return true;
     },
-    async session({ session, token }) {
-      try {
+
+    // Add DB user info into JWT
+    async jwt({ token, user }) {
+      if (user) {
         await connectMongoDB();
-        const user = await User.findOne({ email: session.user.email });
-        
-        if (user) {
-          session.user.id = user._id.toString();
-          session.user.googleId = user.googleId;
-          session.user.favoritesCount = user.favorites.length;
+        const dbUser = await User.findOne({ email: user.email });
+
+        if (dbUser) {
+          token.id = dbUser._id.toString();
+          token.googleId = dbUser.googleId;
+          token.name = dbUser.name;
+          token.email = dbUser.email;
+          token.image = dbUser.image;
         }
-        
-        return session;
-      } catch (error) {
-        console.error('Session callback error:', error);
-        return session;
-      }
-    },
-    async jwt({ token, account, profile }) {
-      if (account) {
-        token.accessToken = account.access_token;
       }
       return token;
-    }
+    },
+
+    // Attach custom fields to client session
+    async session({ session, token }) {
+      if (token) {
+        session.user = {
+          ...session.user,
+          id: token.id,
+          googleId: token.googleId,
+          name: token.name,
+          email: token.email,
+          image: token.image,
+        };
+      }
+      return session;
+    },
   },
+
   pages: {
-    // This line was causing the issue by redirecting back to the home page.
-    // We've removed it to allow NextAuth to use its default sign-in page.
-    // signIn: '/',
-    error: '/',
+    error: "/", // redirect errors to home
   },
+
   session: {
-    strategy: 'jwt',
+    strategy: "jwt",
     maxAge: 30 * 24 * 60 * 60, // 30 days
-    updateAge: 24 * 60 * 60, // 24 hours
+    updateAge: 24 * 60 * 60,   // 24 hours
   },
-  jwt: {
-    secret: process.env.NEXTAUTH_SECRET,
-  },
-  secret: process.env.NEXTAUTH_SECRET,
-  debug: process.env.NODE_ENV === 'development',
+
+  secret: process.env.NEXTAUTH_SECRET, // ✅ keep only this
+  debug: process.env.NODE_ENV === "development",
 });

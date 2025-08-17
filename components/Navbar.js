@@ -7,10 +7,11 @@ import { Search, Heart, LogOut, User, Menu, X } from 'lucide-react';
 import ThemeToggle from './ThemeToggle';
 
 export default function Navbar() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const userMenuRef = useRef(null);
+
   // Close user menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -80,7 +81,9 @@ export default function Navbar() {
             </div>
 
             {/* User Menu / Sign In Button */}
-            {session ? (
+            {status === 'loading' ? (
+              <span className="text-gray-500 italic">Loading...</span>
+            ) : session ? (
               <div className="relative" ref={userMenuRef}>
                 <button
                   onClick={() => setShowUserMenu(!showUserMenu)}
@@ -138,9 +141,8 @@ export default function Navbar() {
                 )}
               </div>
             ) : (
-              // Replaced the italic text with a Sign In button
               <button
-                onClick={() => signIn()}
+                onClick={() => signIn('google')}
                 className="px-4 py-2 rounded-lg font-medium text-white bg-primary-600 hover:bg-primary-700 transition-colors shadow-md"
               >
                 Sign In
@@ -170,7 +172,9 @@ export default function Navbar() {
             id="mobile-menu"
             className="md:hidden border-t border-gray-200 dark:border-gray-800 pt-4 pb-4 animate-slide-up"
           >
-            {session ? (
+            {status === 'loading' ? (
+              <p className="px-2 text-gray-500">Loading...</p>
+            ) : session ? (
               <>
                 {/* User Info */}
                 <div className="flex items-center space-x-3 px-2 py-3 border-b border-gray-200 dark:border-gray-800 mb-2">
@@ -227,11 +231,10 @@ export default function Navbar() {
                 </div>
               </>
             ) : (
-              // Replaced the italic text with a Sign In button for mobile
               <div className="px-2 pt-2">
                 <button
                   onClick={() => {
-                    signIn();
+                    signIn('google');
                     setShowMobileMenu(false);
                   }}
                   className="flex items-center justify-center w-full px-4 py-3 rounded-lg font-bold text-white bg-primary-600 hover:bg-primary-700 transition-colors shadow-md"

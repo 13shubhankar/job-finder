@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
+import { useSession, signIn, signOut } from 'next-auth/react';
 import Head from 'next/head';
 import axios from 'axios';
 import Navbar from '../components/Navbar';
@@ -9,10 +9,8 @@ import { SearchResultsLoading } from '../components/LoadingSpinner';
 import { SearchEmptyState, WelcomeEmptyState, ErrorEmptyState } from '../components/EmptyState';
 import { FaLinkedin } from 'react-icons/fa';
 
-// ... your imports stay the same
-
 export default function HomePage() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const [jobs, setJobs] = useState([]);
   const [favorites, setFavorites] = useState(new Set());
   const [loading, setLoading] = useState(false);
@@ -20,6 +18,7 @@ export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState(null);
   const [hasSearched, setHasSearched] = useState(false);
 
+  // Load favorites when session available
   useEffect(() => {
     if (session) {
       loadFavorites();
@@ -178,6 +177,35 @@ export default function HomePage() {
 
       <div className="min-h-screen">
         <Navbar />
+
+        {/* Session Status Banner */}
+        <div className="bg-gray-100 dark:bg-gray-900 py-3 text-center">
+          {status === 'loading' && (
+            <p className="text-gray-600 dark:text-gray-300">Checking authentication...</p>
+          )}
+          {status === 'unauthenticated' && (
+            <button
+              onClick={() => signIn('google')}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              Sign in with Google
+            </button>
+          )}
+          {status === 'authenticated' && session && (
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
+              <p className="text-gray-700 dark:text-gray-200">
+                ✅ Logged in as <span className="font-semibold">{session.user?.email}</span>
+              </p>
+              <button
+                onClick={() => signOut()}
+                className="px-3 py-1 text-sm bg-red-600 text-white rounded-md hover:bg-red-700"
+              >
+                Sign out
+              </button>
+            </div>
+          )}
+        </div>
+
         <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="mb-12">
             <JobSearch onSearch={handleSearch} loading={loading} />
@@ -185,7 +213,7 @@ export default function HomePage() {
           <div className="max-w-7xl mx-auto">{renderContent()}</div>
         </main>
 
-         <footer className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 mt-16">
+        <footer className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 mt-16">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 text-center">
             <p className="text-base font-medium text-gray-700 dark:text-gray-300">
               © {new Date().getFullYear()}{" "}
